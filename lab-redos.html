@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 2: ReDoS — Ghurir Security Sandbox</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/main.js"></script>
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">G42</span>
+        <span>Ghurir Security Sandbox</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary Navigation">
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link" href="lab-open-redirect.html">Lab 1: Open Redirect</a>
+        <a class="nav-link active" href="lab-redos.html">Lab 2: ReDoS</a>
+        <a class="nav-link" href="lab-prototype-pollution.html">Lab 3: Prototype Pollution</a>
+      </nav>
+      <button id="themeToggle" class="theme-toggle" type="button">Light Mode</button>
+    </div>
+  </header>
+
+  <main class="container lab-container">
+    <div class="lab-header">
+      <span class="eyebrow">LAB 02 &middot; INTERMEDIATE</span>
+      <h1>Regular Expression Denial of Service (ReDoS)</h1>
+      <div class="meta-badges">
+        <span class="badge badge-amber">OWASP A04:2021 — Insecure Design</span>
+        <span class="badge badge-neutral">CWE-1333</span>
+      </div>
+    </div>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">1</span> What it is</h2>
+      <p>
+        ReDoS happens when a regular expression contains nested quantifiers that force the regex engine into exponential backtracking on crafted input. A single short string can lock up a JavaScript thread or server CPU for seconds or minutes, denying service to other users.
+      </p>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">2</span> The line</h2>
+      <div class="code-window">
+        <div class="code-bar">
+          <div><span class="code-dots"><span></span><span></span><span></span></span>validator-vulnerable.js</div>
+          <button class="copy-btn" type="button" data-copy-target="code-vuln-2">Copy</button>
+        </div>
+        <div id="code-vuln-2" class="code-lines">
+          <div class="code-line"><span class="line-num">1</span><span class="line-text"><span class="kw">function</span> <span class="fn">validateCampusEmail</span>(input) {</span></div>
+          <div class="code-line"><span class="line-num">2</span><span class="line-text">  <span class="kw">if</span> (<span class="kw">typeof</span> input !== <span class="str">"string"</span>) {</span></div>
+          <div class="code-line"><span class="line-num">3</span><span class="line-text">    <span class="kw">return</span> { valid: <span class="kw">false</span>, ms: <span class="num">0</span> };</span></div>
+          <div class="code-line"><span class="line-num">4</span><span class="line-text">  }</span></div>
+          <div class="code-line"><span class="line-num">5</span><span class="line-text">  <span class="kw">const</span> start = performance.<span class="fn">now</span>();</span></div>
+          <div class="code-line highlight-vuln"><span class="line-num">6</span><span class="line-text">  <span class="kw">const</span> emailRegex = <span class="str">/^([a-zA-Z0-9]+)+@demo\.local$/</span>; <span class="inline-tag vuln">&larr; Vulnerable Line</span></span></div>
+          <div class="code-line"><span class="line-num">7</span><span class="line-text">  <span class="kw">const</span> valid = emailRegex.<span class="fn">test</span>(input);</span></div>
+          <div class="code-line"><span class="line-num">8</span><span class="line-text">  <span class="kw">const</span> ms = performance.<span class="fn">now</span>() - start;</span></div>
+          <div class="code-line"><span class="line-num">9</span><span class="line-text">  <span class="kw">return</span> { valid, ms };</span></div>
+          <div class="code-line"><span class="line-num">10</span><span class="line-text">}</span></div>
+        </div>
+      </div>
+      <p>
+        Line 6 nests <code>+</code> inside another <code>+</code> (<code>([a-zA-Z0-9]+)+</code>). When the string ends with an invalid character like <code>!</code>, the engine tries 2<sup>n</sup> ways to split the letters before failing.
+      </p>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">3</span> Try it</h2>
+      <div id="sandboxPanel" class="sandbox-panel">
+        <div class="sandbox-header">
+          <div class="mode-status">
+            <span class="status-dot"></span>
+            <span id="modeLabel">VULNERABLE MODE</span>
+          </div>
+          <div class="mode-switch" role="group" aria-label="Toggle Vulnerable or Fixed mode">
+            <button id="btnVuln" class="mode-btn active-vuln" type="button">Vulnerable</button>
+            <button id="btnFixed" class="mode-btn" type="button">Fixed</button>
+          </div>
+        </div>
+
+        <div class="payload-bar">
+          <button class="btn btn-payload" type="button" data-payload="student42@demo.local">Safe: student42@demo.local</button>
+          <button class="btn btn-payload attack" type="button" data-payload="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!">Attack 1 (31 chars): 30x a + !</button>
+          <button class="btn btn-payload attack" type="button" data-payload="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!">Attack 2 (34 chars): 33x a + !</button>
+        </div>
+
+        <div class="input-row">
+          <input id="regexInput" class="text-input" type="text" maxlength="35" value="student42@demo.local" aria-label="Email input to validate">
+          <button id="runRegexBtn" class="btn btn-primary" type="button">Run Regex Test</button>
+        </div>
+
+        <div class="metrics-row">
+          <div class="metric-tile">
+            <div class="metric-label">Execution Time</div>
+            <div id="metricTime" class="metric-value">0.00 ms</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-label">Input Length</div>
+            <div id="metricLen" class="metric-value">20 chars</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-label">Match Result</div>
+            <div id="metricMatch" class="metric-value">Idle</div>
+          </div>
+        </div>
+
+        <div class="gauge-track" aria-label="CPU latency gauge">
+          <div id="gaugeFill" class="gauge-fill"></div>
+        </div>
+
+        <div id="regexOutput" class="alert-box">
+          <strong>Ready to measure</strong>
+          Press a payload button to run the real regex engine and measure execution time in milliseconds. (Input is safely capped at 35 characters so your browser never hangs.)
+        </div>
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">4</span> Why it matters</h2>
+      <p>
+        Node.js and web browsers execute JavaScript on a single main thread. If one request triggers catastrophic backtracking, the entire server or browser tab stalls, dropping legitimate traffic without needing a botnet.
+      </p>
+      <div class="incident-callout">
+        <strong>Real-world incident:</strong> On July 2, 2019, a single backtracking regular expression deployed in a Cloudflare WAF rule spiked CPU usage to 100% globally and caused a 27-minute worldwide outage returning 502 errors.
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">5</span> The fix</h2>
+      <div class="code-window">
+        <div class="code-bar">
+          <div><span class="code-dots"><span></span><span></span><span></span></span>validator-fixed.js</div>
+          <button class="copy-btn" type="button" data-copy-target="code-fix-2">Copy</button>
+        </div>
+        <div id="code-fix-2" class="code-lines">
+          <div class="code-line"><span class="line-num">1</span><span class="line-text"><span class="kw">function</span> <span class="fn">validateCampusEmail</span>(input) {</span></div>
+          <div class="code-line"><span class="line-num">2</span><span class="line-text">  <span class="kw">if</span> (<span class="kw">typeof</span> input !== <span class="str">"string"</span> || input.length &gt; <span class="num">64</span>) {</span></div>
+          <div class="code-line"><span class="line-num">3</span><span class="line-text">    <span class="kw">return</span> { valid: <span class="kw">false</span>, ms: <span class="num">0</span> };</span></div>
+          <div class="code-line"><span class="line-num">4</span><span class="line-text">  }</span></div>
+          <div class="code-line"><span class="line-num">5</span><span class="line-text">  <span class="kw">const</span> start = performance.<span class="fn">now</span>();</span></div>
+          <div class="code-line highlight-fix"><span class="line-num">6</span><span class="line-text">  <span class="kw">const</span> emailRegex = <span class="str">/^[a-zA-Z0-9]+@demo\.local$/</span>; <span class="inline-tag fix">&larr; Security Fix</span></span></div>
+          <div class="code-line"><span class="line-num">7</span><span class="line-text">  <span class="kw">const</span> valid = emailRegex.<span class="fn">test</span>(input);</span></div>
+          <div class="code-line"><span class="line-num">8</span><span class="line-text">  <span class="kw">const</span> ms = performance.<span class="fn">now</span>() - start;</span></div>
+          <div class="code-line"><span class="line-num">9</span><span class="line-text">  <span class="kw">return</span> { valid, ms };</span></div>
+          <div class="code-line"><span class="line-num">10</span><span class="line-text">}</span></div>
+        </div>
+      </div>
+      <p>
+        Removing the nested quantifier makes matching strictly linear O(n). Switch to <strong>Fixed</strong> mode and run Attack 2 again to see execution drop below 0.1 ms.
+      </p>
+      <div style="margin-top: 0.75rem;">
+        <button id="switchToFixShortcut" class="btn btn-secondary" type="button">Switch Sandbox to Fixed Mode &uarr;</button>
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">6</span> Sources</h2>
+      <ul class="sources-list">
+        <li><a href="https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/" target="_blank" rel="noopener noreferrer">Cloudflare Blog: Details of the Cloudflare Outage on July 2, 2019</a></li>
+        <li><a href="https://cwe.mitre.org/data/definitions/1333.html" target="_blank" rel="noopener noreferrer">MITRE CWE-1333: Inefficient Regular Expression Complexity</a></li>
+      </ul>
+    </section>
+
+    <div class="lab-pager">
+      <a class="btn btn-secondary" href="lab-open-redirect.html">&larr; Previous: Lab 1</a>
+      <a class="btn btn-primary" href="lab-prototype-pollution.html">Next: Lab 3 (Prototype Pollution) &rarr;</a>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Ghurir Final Project — 42 Amman / 42 Irbid &middot; Lab 2: ReDoS Performance Simulation
+  </footer>
+
+  <script src="js/lab-redos.js"></script>
+</body>
+</html>

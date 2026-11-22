@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 1: Open Redirect — Ghurir Security Sandbox</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/main.js"></script>
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">G42</span>
+        <span>Ghurir Security Sandbox</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary Navigation">
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link active" href="lab-open-redirect.html">Lab 1: Open Redirect</a>
+        <a class="nav-link" href="lab-redos.html">Lab 2: ReDoS</a>
+        <a class="nav-link" href="lab-prototype-pollution.html">Lab 3: Prototype Pollution</a>
+      </nav>
+      <button id="themeToggle" class="theme-toggle" type="button">Light Mode</button>
+    </div>
+  </header>
+
+  <main class="container lab-container">
+    <div class="lab-header">
+      <span class="eyebrow">LAB 01 &middot; BEGINNER</span>
+      <h1>Open Redirect</h1>
+      <div class="meta-badges">
+        <span class="badge badge-blue">OWASP A01:2021 — Broken Access Control</span>
+        <span class="badge badge-neutral">CWE-601</span>
+      </div>
+    </div>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">1</span> What it is</h2>
+      <p>
+        An Open Redirect occurs when a web application takes a user-controlled URL parameter (such as <code>?redirect=...</code>) and sends the browser straight to that destination without checking whether it belongs to the same site. Attackers abuse this flaw to craft links starting with a trusted domain that silently forward victims to a phishing page.
+      </p>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">2</span> The line</h2>
+      <div class="code-window">
+        <div class="code-bar">
+          <div><span class="code-dots"><span></span><span></span><span></span></span>redirect-vulnerable.js</div>
+          <button class="copy-btn" type="button" data-copy-target="code-vuln-1">Copy</button>
+        </div>
+        <div id="code-vuln-1" class="code-lines">
+          <div class="code-line"><span class="line-num">1</span><span class="line-text"><span class="kw">function</span> <span class="fn">handleLoginRedirect</span>(queryString) {</span></div>
+          <div class="code-line"><span class="line-num">2</span><span class="line-text">  <span class="kw">const</span> params = <span class="kw">new</span> <span class="fn">URLSearchParams</span>(queryString);</span></div>
+          <div class="code-line"><span class="line-num">3</span><span class="line-text">  <span class="kw">const</span> nextUrl = params.<span class="fn">get</span>(<span class="str">"redirect"</span>) || <span class="str">"/dashboard"</span>;</span></div>
+          <div class="code-line"><span class="line-num">4</span><span class="line-text"></span></div>
+          <div class="code-line"><span class="line-num">5</span><span class="line-text">  <span class="cm">// Assumes nextUrl is always an internal route</span></span></div>
+          <div class="code-line"><span class="line-num">6</span><span class="line-text">  <span class="kw">if</span> (!nextUrl.<span class="fn">trim</span>()) {</span></div>
+          <div class="code-line"><span class="line-num">7</span><span class="line-text">    <span class="kw">return</span> <span class="fn">navigate</span>(<span class="str">"/dashboard"</span>);</span></div>
+          <div class="code-line"><span class="line-num">8</span><span class="line-text">  }</span></div>
+          <div class="code-line highlight-vuln"><span class="line-num">9</span><span class="line-text">  <span class="kw">return</span> <span class="fn">navigate</span>(nextUrl); <span class="inline-tag vuln">&larr; Vulnerable Line</span></span></div>
+          <div class="code-line"><span class="line-num">10</span><span class="line-text">}</span></div>
+        </div>
+      </div>
+      <p>
+        Line 9 passes untrusted input directly to navigation without verifying the scheme or origin. Both full URLs (<code>https://evil.example</code>) and protocol-relative URLs (<code>//evil.example</code>) escape the application domain.
+      </p>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">3</span> Try it</h2>
+      <div id="sandboxPanel" class="sandbox-panel">
+        <div class="sandbox-header">
+          <div class="mode-status">
+            <span class="status-dot"></span>
+            <span id="modeLabel">VULNERABLE MODE</span>
+          </div>
+          <div class="mode-switch" role="group" aria-label="Toggle Vulnerable or Fixed mode">
+            <button id="btnVuln" class="mode-btn active-vuln" type="button">Vulnerable</button>
+            <button id="btnFixed" class="mode-btn" type="button">Fixed</button>
+          </div>
+        </div>
+
+        <div class="payload-bar">
+          <button class="btn btn-payload" type="button" data-payload="/dashboard">Safe: /dashboard</button>
+          <button class="btn btn-payload attack" type="button" data-payload="https://evil-login.example.com/verify">Attack 1: https://evil-login.example.com/verify</button>
+          <button class="btn btn-payload attack" type="button" data-payload="//attacker.example.com/phish">Attack 2: //attacker.example.com/phish</button>
+        </div>
+
+        <div class="input-row">
+          <input id="redirectInput" class="text-input" type="text" value="/dashboard" aria-label="Redirect parameter value">
+          <button id="runRedirectBtn" class="btn btn-primary" type="button">Run Login Redirect</button>
+        </div>
+
+        <div class="sim-browser">
+          <div class="sim-browser-bar">
+            <span id="simLock" aria-hidden="true">&#128274;</span>
+            <div id="simUrl" class="sim-url-pill">https://ghurir-portal.demo/login?redirect=/dashboard</div>
+          </div>
+          <div id="simViewport" class="sim-viewport">
+            <div class="alert-box">
+              <strong>Ready to test</strong>
+              Click a payload button above to simulate a post-login redirect.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">4</span> Why it matters</h2>
+      <p>
+        Email filters and security-conscious users inspect the start of a link to judge trust. Because an Open Redirect begins with a legitimate domain, victims trust the link and enter credentials on an attacker-controlled lookalike page, or leak OAuth authorization tokens.
+      </p>
+      <div class="incident-callout">
+        <strong>Real-world incident:</strong> In OAuth 2.0 security advisories documented in RFC 9700 and OWASP CWE-601 reports, open redirect endpoints on trusted domains have repeatedly been chained with OAuth login flows to hijack authentication tokens and bypass phishing filters.
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">5</span> The fix</h2>
+      <div class="code-window">
+        <div class="code-bar">
+          <div><span class="code-dots"><span></span><span></span><span></span></span>redirect-fixed.js</div>
+          <button class="copy-btn" type="button" data-copy-target="code-fix-1">Copy</button>
+        </div>
+        <div id="code-fix-1" class="code-lines">
+          <div class="code-line"><span class="line-num">1</span><span class="line-text"><span class="kw">function</span> <span class="fn">handleLoginRedirect</span>(queryString) {</span></div>
+          <div class="code-line"><span class="line-num">2</span><span class="line-text">  <span class="kw">const</span> params = <span class="kw">new</span> <span class="fn">URLSearchParams</span>(queryString);</span></div>
+          <div class="code-line"><span class="line-num">3</span><span class="line-text">  <span class="kw">const</span> nextUrl = (params.<span class="fn">get</span>(<span class="str">"redirect"</span>) || <span class="str">"/dashboard"</span>).<span class="fn">trim</span>();</span></div>
+          <div class="code-line"><span class="line-num">4</span><span class="line-text">  <span class="kw">const</span> origin = <span class="str">"https://ghurir-portal.demo"</span>;</span></div>
+          <div class="code-line"><span class="line-num">5</span><span class="line-text"></span></div>
+          <div class="code-line highlight-fix"><span class="line-num">6</span><span class="line-text">  <span class="kw">const</span> parsed = <span class="kw">new</span> <span class="fn">URL</span>(nextUrl, origin); <span class="inline-tag fix">&larr; Security Fix</span></span></div>
+          <div class="code-line highlight-fix"><span class="line-num">7</span><span class="line-text">  <span class="kw">if</span> (!nextUrl.<span class="fn">startsWith</span>(<span class="str">"/"</span>) || nextUrl.<span class="fn">startsWith</span>(<span class="str">"//"</span>) || parsed.origin !== origin) {</span></div>
+          <div class="code-line"><span class="line-num">8</span><span class="line-text">    <span class="kw">return</span> <span class="fn">navigate</span>(<span class="str">"/dashboard"</span>); <span class="cm">// Reject external hosts</span></span></div>
+          <div class="code-line"><span class="line-num">9</span><span class="line-text">  }</span></div>
+          <div class="code-line"><span class="line-num">10</span><span class="line-text">  <span class="kw">return</span> <span class="fn">navigate</span>(parsed.pathname + parsed.search);</span></div>
+          <div class="code-line"><span class="line-num">11</span><span class="line-text">}</span></div>
+        </div>
+      </div>
+      <p>
+        Switch the sandbox to <strong>Fixed</strong> mode and re-run Attack 1 or Attack 2 to verify both external and protocol-relative redirects are blocked.
+      </p>
+      <div style="margin-top: 0.75rem;">
+        <button id="switchToFixShortcut" class="btn btn-secondary" type="button">Switch Sandbox to Fixed Mode &uarr;</button>
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">6</span> Sources</h2>
+      <ul class="sources-list">
+        <li><a href="https://cwe.mitre.org/data/definitions/601.html" target="_blank" rel="noopener noreferrer">MITRE CWE-601: URL Redirection to Untrusted Site (Open Redirect)</a></li>
+        <li><a href="https://community.owasp.org/attacks/open_redirect" target="_blank" rel="noopener noreferrer">OWASP Foundation: Open Redirect Attack Overview</a></li>
+        <li><a href="https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/07-Injection/24-Server-side_URL_Redirect/" target="_blank" rel="noopener noreferrer">OWASP Web Security Testing Guide: Testing for URL Redirection</a></li>
+      </ul>
+    </section>
+
+    <div class="lab-pager">
+      <a class="btn btn-secondary" href="index.html">&larr; Back to Home</a>
+      <a class="btn btn-primary" href="lab-redos.html">Next: Lab 2 (ReDoS) &rarr;</a>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Ghurir Final Project — 42 Amman / 42 Irbid &middot; Lab 1: Open Redirect Simulation
+  </footer>
+
+  <script src="js/lab-open-redirect.js"></script>
+</body>
+</html>

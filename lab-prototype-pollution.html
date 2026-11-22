@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 3: Prototype Pollution — Ghurir Security Sandbox</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/main.js"></script>
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">G42</span>
+        <span>Ghurir Security Sandbox</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary Navigation">
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link" href="lab-open-redirect.html">Lab 1: Open Redirect</a>
+        <a class="nav-link" href="lab-redos.html">Lab 2: ReDoS</a>
+        <a class="nav-link active" href="lab-prototype-pollution.html">Lab 3: Prototype Pollution</a>
+      </nav>
+      <button id="themeToggle" class="theme-toggle" type="button">Light Mode</button>
+    </div>
+  </header>
+
+  <main class="container lab-container">
+    <div class="lab-header">
+      <span class="eyebrow">LAB 03 &middot; CHALLENGE LAB</span>
+      <h1>Prototype Pollution</h1>
+      <div class="meta-badges">
+        <span class="badge badge-red">OWASP A03 / A08:2021</span>
+        <span class="badge badge-neutral">CWE-1321</span>
+      </div>
+    </div>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">1</span> What it is</h2>
+      <p>
+        Prototype Pollution is a JavaScript vulnerability where unsafe recursive object merging lets attacker-supplied JSON modify shared prototype properties via keys like <code>__proto__</code> or <code>constructor</code>. Because every plain object inherits from <code>Object.prototype</code>, injecting a property like <code>isAdmin: true</code> silently alters authorization checks across the entire application.
+      </p>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">2</span> The line</h2>
+      <div class="code-window">
+        <div class="code-bar">
+          <div><span class="code-dots"><span></span><span></span><span></span></span>merge-vulnerable.js</div>
+          <button class="copy-btn" type="button" data-copy-target="code-vuln-3">Copy</button>
+        </div>
+        <div id="code-vuln-3" class="code-lines">
+          <div class="code-line"><span class="line-num">1</span><span class="line-text"><span class="kw">function</span> <span class="fn">deepMerge</span>(target, source) {</span></div>
+          <div class="code-line"><span class="line-num">2</span><span class="line-text">  <span class="kw">for</span> (<span class="kw">const</span> key <span class="kw">of</span> Object.<span class="fn">keys</span>(source)) {</span></div>
+          <div class="code-line"><span class="line-num">3</span><span class="line-text">    <span class="kw">const</span> val = source[key];</span></div>
+          <div class="code-line"><span class="line-num">4</span><span class="line-text">    <span class="kw">if</span> (val &amp;&amp; <span class="kw">typeof</span> val === <span class="str">"object"</span>) {</span></div>
+          <div class="code-line"><span class="line-num">5</span><span class="line-text">      <span class="kw">if</span> (!target[key]) target[key] = {};</span></div>
+          <div class="code-line highlight-vuln"><span class="line-num">6</span><span class="line-text">      <span class="fn">deepMerge</span>(target[key], val); <span class="inline-tag vuln">&larr; Vulnerable Line</span></span></div>
+          <div class="code-line"><span class="line-num">7</span><span class="line-text">    } <span class="kw">else</span> {</span></div>
+          <div class="code-line"><span class="line-num">8</span><span class="line-text">      target[key] = val;</span></div>
+          <div class="code-line"><span class="line-num">9</span><span class="line-text">    }</span></div>
+          <div class="code-line"><span class="line-num">10</span><span class="line-text">  }</span></div>
+          <div class="code-line"><span class="line-num">11</span><span class="line-text">  <span class="kw">return</span> target;</span></div>
+          <div class="code-line"><span class="line-num">12</span><span class="line-text">}</span></div>
+        </div>
+      </div>
+      <p>
+        Line 6 recurses directly into <code>target["__proto__"]</code> or <code>target["constructor"]["prototype"]</code>, writing attacker keys onto the shared prototype inherited by all new user objects.
+      </p>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">3</span> Try it</h2>
+      <div id="sandboxPanel" class="sandbox-panel">
+        <div class="sandbox-header">
+          <div class="mode-status">
+            <span class="status-dot"></span>
+            <span id="modeLabel">VULNERABLE MODE</span>
+          </div>
+          <div class="mode-switch" role="group" aria-label="Toggle Vulnerable or Fixed mode">
+            <button id="btnVuln" class="mode-btn active-vuln" type="button">Vulnerable</button>
+            <button id="btnFixed" class="mode-btn" type="button">Fixed</button>
+          </div>
+        </div>
+
+        <div class="payload-bar">
+          <button class="btn btn-payload" type="button" data-payload='{"theme":"compact","notifications":true}'>Safe: {"theme":"compact"}</button>
+          <button class="btn btn-payload attack" type="button" data-payload='{"__proto__":{"isAdmin":true}}'>Attack 1: {"__proto__":{"isAdmin":true}}</button>
+          <button class="btn btn-payload attack" type="button" data-payload='{"constructor":{"prototype":{"isAdmin":true}}}'>Attack 2: {"constructor":{"prototype":{"isAdmin":true}}}</button>
+        </div>
+
+        <div class="input-row">
+          <input id="jsonInput" class="text-input" type="text" value='{"theme":"compact","notifications":true}' aria-label="JSON preferences payload">
+          <button id="runMergeBtn" class="btn btn-primary" type="button">Apply JSON Settings</button>
+        </div>
+
+        <div class="proto-grid">
+          <div class="inspector-card">
+            <h4>Session Authorization State</h4>
+            <div style="margin-bottom: 0.65rem;">
+              User: <strong>guest_42</strong> &nbsp;|&nbsp;
+              Role: <span id="roleBadge" class="badge badge-neutral">Standard User</span>
+            </div>
+            <div id="protoLog" class="alert-box">
+              <strong>Ready to test</strong>
+              Submit a JSON payload to merge into user settings and inspect a fresh session object.
+            </div>
+            <div id="adminVault" class="admin-vault hidden">
+              <strong>ADMIN PANEL UNLOCKED (Simulated Privilege Escalation)</strong>
+              A brand-new <code>freshUser</code> object inherited <code>isAdmin === true</code> from the polluted prototype!
+            </div>
+          </div>
+          <div class="inspector-card">
+            <h4>Live Object &amp; Prototype Inspector</h4>
+            <pre id="protoState" class="json-box">{
+  "freshUser.ownKeys": ["username"],
+  "freshUser.isAdmin": false,
+  "Object.prototype.isAdmin": undefined
+}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">4</span> Why it matters</h2>
+      <p>
+        A single unguarded merge helper in a shared library can compromise authentication checks, feature flags, or server-side template gadgets across every object in a Node.js or browser application.
+      </p>
+      <div class="incident-callout">
+        <strong>Real-world incident:</strong> Lodash <code>CVE-2019-10744</code> (CVSS 9.1 Critical) allowed attackers to pollute <code>Object.prototype</code> via <code>defaultsDeep</code> using a <code>constructor.prototype</code> payload, impacting millions of JavaScript applications worldwide.
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">5</span> The fix</h2>
+      <div class="code-window">
+        <div class="code-bar">
+          <div><span class="code-dots"><span></span><span></span><span></span></span>merge-fixed.js</div>
+          <button class="copy-btn" type="button" data-copy-target="code-fix-3">Copy</button>
+        </div>
+        <div id="code-fix-3" class="code-lines">
+          <div class="code-line"><span class="line-num">1</span><span class="line-text"><span class="kw">const</span> BLOCKED = <span class="kw">new</span> <span class="fn">Set</span>([<span class="str">"__proto__"</span>, <span class="str">"constructor"</span>, <span class="str">"prototype"</span>]);</span></div>
+          <div class="code-line"><span class="line-num">2</span><span class="line-text"><span class="kw">function</span> <span class="fn">deepMerge</span>(target, source) {</span></div>
+          <div class="code-line"><span class="line-num">3</span><span class="line-text">  <span class="kw">for</span> (<span class="kw">const</span> key <span class="kw">of</span> Object.<span class="fn">keys</span>(source)) {</span></div>
+          <div class="code-line highlight-fix"><span class="line-num">4</span><span class="line-text">    <span class="kw">if</span> (BLOCKED.<span class="fn">has</span>(key)) <span class="kw">continue</span>; <span class="inline-tag fix">&larr; Security Fix</span></span></div>
+          <div class="code-line"><span class="line-num">5</span><span class="line-text">    <span class="kw">const</span> val = source[key];</span></div>
+          <div class="code-line"><span class="line-num">6</span><span class="line-text">    <span class="kw">if</span> (val &amp;&amp; <span class="kw">typeof</span> val === <span class="str">"object"</span>) {</span></div>
+          <div class="code-line"><span class="line-num">7</span><span class="line-text">      <span class="kw">if</span> (!Object.prototype.hasOwnProperty.<span class="fn">call</span>(target, key)) target[key] = {};</span></div>
+          <div class="code-line"><span class="line-num">8</span><span class="line-text">      <span class="fn">deepMerge</span>(target[key], val);</span></div>
+          <div class="code-line"><span class="line-num">9</span><span class="line-text">    } <span class="kw">else</span> {</span></div>
+          <div class="code-line"><span class="line-num">10</span><span class="line-text">      target[key] = val;</span></div>
+          <div class="code-line"><span class="line-num">11</span><span class="line-text">    }</span></div>
+          <div class="code-line"><span class="line-num">12</span><span class="line-text">  }</span></div>
+          <div class="code-line"><span class="line-num">13</span><span class="line-text">  <span class="kw">return</span> target;</span></div>
+          <div class="code-line"><span class="line-num">14</span><span class="line-text">}</span></div>
+        </div>
+      </div>
+      <p>
+        Explicitly blocking <code>__proto__</code>, <code>constructor</code>, and <code>prototype</code> stops prototype chain traversal. Switch to <strong>Fixed</strong> mode and re-run both attack payloads to verify the user stays a Standard User.
+      </p>
+      <div style="margin-top: 0.75rem;">
+        <button id="switchToFixShortcut" class="btn btn-secondary" type="button">Switch Sandbox to Fixed Mode &uarr;</button>
+      </div>
+    </section>
+
+    <section class="lab-section">
+      <h2 class="section-label"><span class="section-num">6</span> Sources</h2>
+      <ul class="sources-list">
+        <li><a href="https://cwe.mitre.org/data/definitions/1321.html" target="_blank" rel="noopener noreferrer">MITRE CWE-1321: Improperly Controlled Modification of Object Prototype Attributes</a></li>
+        <li><a href="https://nvd.nist.gov/vuln/detail/cve-2019-10744" target="_blank" rel="noopener noreferrer">NVD: CVE-2019-10744 (Lodash Prototype Pollution)</a></li>
+        <li><a href="https://security.snyk.io/vuln/SNYK-JS-LODASH-450202" target="_blank" rel="noopener noreferrer">Snyk Vulnerability Database: Prototype Pollution in Lodash</a></li>
+      </ul>
+    </section>
+
+    <div class="lab-pager">
+      <a class="btn btn-secondary" href="lab-redos.html">&larr; Previous: Lab 2</a>
+      <a class="btn btn-primary" href="index.html">Back to All Labs &rarr;</a>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Ghurir Final Project — 42 Amman / 42 Irbid &middot; Lab 3: Prototype Pollution Simulation
+  </footer>
+
+  <script src="js/lab-prototype-pollution.js"></script>
+</body>
+</html>
